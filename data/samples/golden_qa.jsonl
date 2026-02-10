@@ -1,0 +1,5 @@
+{"id": "qa-001", "input": "What is the capital of France?", "expected_output": "The capital of France is Paris.", "actual_output": "Paris is the capital of France."}
+{"id": "qa-002", "input": "Explain photosynthesis in one sentence.", "expected_output": "Photosynthesis is the process by which plants convert sunlight into energy.", "actual_output": "Plants use sunlight to make food through photosynthesis."}
+{"id": "qa-003", "input": "What is 2 + 2?", "expected_output": "4", "actual_output": "The answer is 4."}
+{"id": "qa-004", "input": "Name the largest planet in our solar system.", "expected_output": "Jupiter is the largest planet in our solar system.", "actual_output": "Jupiter is the largest planet."}
+{"id": "qa-005", "input": "What programming language is known for its use in data science?", "expected_output": "Python is widely known for its use in data science.", "actual_output": "Python is the most popular language for data science and machine learning."}

@@ -1,0 +1,29 @@
+name: "rag-evaluation"
+description: "RAG evaluation with faithfulness, relevancy, and context precision"
+
+data_source:
+  source_type: jsonl
+  path: "data/samples/golden_rag.jsonl"
+
+scorers:
+  - tier: L1
+    scorer_name: length
+    min_length: 10
+    max_length: 2000
+    threshold: 1.0
+
+  - tier: L2
+    scorer_name: rouge
+    rouge_types: ["rouge1", "rougeL"]
+    threshold: 0.3
+
+  - tier: RAG
+    scorer_name: rag_triple_check
+    evaluation_model: "gpt-4o"
+    faithfulness_threshold: 0.7
+    relevancy_threshold: 0.7
+    precision_threshold: 0.7
+    threshold: 0.7
+
+numerical_guard:
+  enabled: false
