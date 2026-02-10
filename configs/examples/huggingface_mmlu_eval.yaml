@@ -1,0 +1,91 @@
+# =============================================================================
+# HuggingFace Dataset Evaluation — MMLU Benchmark
+# =============================================================================
+# Demonstrates loading a gated HuggingFace dataset with field mapping,
+# running multi-tier evaluation with W&B tracking.
+# Requires: HF_TOKEN (for gated datasets), OPENAI_API_KEY (for L3 judge)
+# =============================================================================
+
+name: "hf-mmlu-benchmark"
+description: >
+  Evaluate model performance on MMLU (Massive Multitask Language
+  Understanding) loaded directly from HuggingFace Hub. Uses field
+  mapping to bridge HF dataset columns to Aero-Eval's schema.
+
+provider:
+  provider_type: openai
+  model_name: "gpt-4o-mini"
+  api_key: "${OPENAI_API_KEY}"
+  temperature: 0.0
+  max_tokens: 512
+  enable_logprobs: true
+  top_logprobs: 5
+  timeout_seconds: 60
+
+data_source:
+  source_type: huggingface
+  dataset_name: "cais/mmlu"
+  split: "test"
+  field_mapping:
+    input: "question"
+    expected_output: "answer"
+  limit: 200  # Evaluate first 200 examples
+
+scorers:
+  # ── L1: Basic output validation ──
+  - tier: L1
+    scorer_name: length
+    min_length: 1
+    max_length: 2000
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: keyword
+    forbidden_keywords: ["I don't know", "I cannot", "As an AI"]
+    case_sensitive: false
+    threshold: 1.0
+
+  # ── L2: Answer similarity ──
+  - tier: L2
+    scorer_name: rouge
+    rouge_types: ["rouge1", "rouge2", "rougeL"]
+    threshold: 0.4
+
+  - tier: L2
+    scorer_name: cosine
+    embedding_model: "all-MiniLM-L6-v2"
+    threshold: 0.5
+
+  # ── L3: Correctness judgment ──
+  - tier: L3
+    scorer_name: geval
+    evaluation_model: "gpt-4o"
+    criteria: >
+      Is the selected answer correct? Compare the model's response to the
+      expected answer. The model should pick the right multiple-choice
+      option and provide sound reasoning.
+    threshold: 0.7
+    include_reason: true
+
+  # ── L4: Performance tracking ──
+  - tier: L4
+    scorer_name: ttft
+    ttft_threshold_ms: 500
+    threshold: 0.8
+
+  - tier: L4
+    scorer_name: throughput
+    throughput_min_tps: 15.0
+    threshold: 0.7
+
+numerical_guard:
+  enabled: true
+  sigma_threshold: 3.0
+  enable_nan_check: true
+  enable_inf_check: true
+  window_size: 50
+
+wandb_project: "aero-eval-mmlu"
+wandb_tags: ["mmlu", "benchmark", "huggingface", "gpt-4o-mini"]
+concurrency: 15
+fail_fast: false

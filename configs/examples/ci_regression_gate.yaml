@@ -1,0 +1,56 @@
+# =============================================================================
+# CI/CD Regression Gate
+# =============================================================================
+# Minimal, fast config designed for CI pipelines. Uses only deterministic
+# and statistical scorers (no LLM API calls) with strict thresholds.
+# Exits on first failure to fail the build fast.
+# Requires: No API keys (all local computation)
+# =============================================================================
+
+name: "ci-regression-gate"
+description: >
+  Lightweight regression gate for CI/CD. Fast deterministic checks with
+  strict pass/fail thresholds. Designed to run in <30 seconds on CPU.
+  Use as a GitHub Actions step or Jenkins stage.
+
+data_source:
+  source_type: jsonl
+  path: "data/samples/golden_qa.jsonl"
+
+scorers:
+  # ── L1: Hard format requirements (must all pass) ──
+  - tier: L1
+    scorer_name: length
+    min_length: 1
+    max_length: 5000
+    threshold: 1.0   # Zero tolerance
+
+  - tier: L1
+    scorer_name: keyword
+    expected_keywords: []
+    forbidden_keywords:
+      - "error"
+      - "exception"
+      - "traceback"
+      - "undefined"
+      - "null"
+      - "NaN"
+    case_sensitive: false
+    threshold: 1.0   # Zero tolerance
+
+  - tier: L1
+    scorer_name: regex
+    pattern: "^[A-Z]"  # Must start with uppercase (proper sentence)
+    threshold: 1.0
+
+  # ── L2: Semantic similarity floor ──
+  - tier: L2
+    scorer_name: rouge
+    rouge_types: ["rouge1", "rougeL"]
+    threshold: 0.25   # Low but catches catastrophic regression
+
+numerical_guard:
+  enabled: false
+
+concurrency: 10
+fail_fast: true   # Exit immediately on first failure

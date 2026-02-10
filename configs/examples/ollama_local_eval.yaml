@@ -1,0 +1,67 @@
+# =============================================================================
+# Local Ollama Evaluation — No API Keys Required
+# =============================================================================
+# Runs a fully local evaluation using Ollama for inference and only L1/L2
+# scorers that don't need external APIs. Perfect for development, CI
+# pipelines, or air-gapped environments.
+# Requires: Ollama running locally (ollama serve)
+# =============================================================================
+
+name: "ollama-local-eval"
+description: >
+  Fully local evaluation pipeline. Uses Ollama for inference and only
+  deterministic (L1) and statistical (L2) scorers. No API keys needed.
+  Run this in CI to catch regressions without external dependencies.
+
+provider:
+  provider_type: ollama
+  model_name: "llama3.1:8b"
+  base_url: "${OLLAMA_BASE_URL}"
+  temperature: 0.0
+  max_tokens: 1024
+  timeout_seconds: 120
+
+data_source:
+  source_type: jsonl
+  path: "data/samples/golden_qa.jsonl"
+
+scorers:
+  # ── L1: Strict format validation ──
+  - tier: L1
+    scorer_name: length
+    min_length: 5
+    max_length: 2000
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: keyword
+    forbidden_keywords: ["<|", "|>", "[INST]", "[/INST]", "<s>", "</s>"]
+    case_sensitive: true
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: regex
+    pattern: "\\S"  # Must contain at least one non-whitespace char
+    threshold: 1.0
+
+  # ── L2: Similarity checks ──
+  - tier: L2
+    scorer_name: rouge
+    rouge_types: ["rouge1", "rouge2", "rougeL"]
+    threshold: 0.25
+
+  - tier: L2
+    scorer_name: bertscore
+    bertscore_model: "roberta-large"
+    threshold: 0.65
+
+  - tier: L2
+    scorer_name: cosine
+    embedding_model: "all-MiniLM-L6-v2"
+    threshold: 0.5
+
+numerical_guard:
+  enabled: false
+
+concurrency: 3   # Ollama handles limited concurrency
+fail_fast: false

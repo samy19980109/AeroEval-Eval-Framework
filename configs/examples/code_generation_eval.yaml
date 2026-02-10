@@ -1,0 +1,106 @@
+# =============================================================================
+# Code Generation Evaluation
+# =============================================================================
+# Evaluates LLM-generated code for structural correctness (JSON schema,
+# regex patterns), keyword presence, and LLM-judged quality.
+# Requires: OPENAI_API_KEY (for L3 judge), ANTHROPIC_API_KEY (for provider)
+# =============================================================================
+
+name: "code-generation-eval"
+description: >
+  Evaluate code generation quality: structural validity via JSON schema,
+  required language constructs via regex/keywords, semantic similarity
+  via BERTScore, and holistic quality via LLM judge with step-by-step
+  evaluation rubric.
+
+provider:
+  provider_type: anthropic
+  model_name: "claude-sonnet-4-5-20250929"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.0
+  max_tokens: 4096
+  timeout_seconds: 90
+
+data_source:
+  source_type: jsonl
+  path: "data/samples/golden_qa.jsonl"
+
+scorers:
+  # ── L1: Structural validation ──
+  - tier: L1
+    scorer_name: json_schema
+    json_schema:
+      type: object
+      required: ["code", "language", "explanation"]
+      properties:
+        code:
+          type: string
+          minLength: 10
+        language:
+          type: string
+          enum: ["python", "javascript", "typescript", "go", "rust"]
+        explanation:
+          type: string
+          minLength: 20
+      additionalProperties: true
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: regex
+    pattern: "(def |function |func |fn )"  # Must define at least one function
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: keyword
+    expected_keywords: ["return"]
+    forbidden_keywords: ["TODO", "HACK", "FIXME", "XXX", "password", "secret"]
+    case_sensitive: true
+    threshold: 1.0
+
+  - tier: L1
+    scorer_name: length
+    min_length: 50
+    max_length: 15000
+    threshold: 1.0
+
+  # ── L2: Similarity to reference solution ──
+  - tier: L2
+    scorer_name: bertscore
+    bertscore_model: "roberta-large"
+    threshold: 0.6
+
+  - tier: L2
+    scorer_name: cosine
+    embedding_model: "all-MiniLM-L6-v2"
+    threshold: 0.5
+
+  # ── L3: LLM-judged code quality with step-by-step rubric ──
+  - tier: L3
+    scorer_name: geval
+    evaluation_model: "gpt-4o"
+    evaluation_steps:
+      - "Check if the code compiles/runs without syntax errors"
+      - "Verify the code correctly implements the requested functionality"
+      - "Assess whether edge cases are handled (null inputs, empty arrays, etc.)"
+      - "Evaluate code readability: meaningful variable names, clear structure"
+      - "Check for security issues: injection, unsafe operations, hardcoded secrets"
+      - "Rate overall quality on a 1-5 scale and normalize to 0-1"
+    threshold: 0.6
+    include_reason: true
+
+  - tier: L3
+    scorer_name: custom_judge
+    evaluation_model: "gpt-4o"
+    criteria: >
+      Does the code follow best practices for the target language?
+      Is it idiomatic, efficient, and well-documented?
+    threshold: 0.5
+    include_reason: true
+
+numerical_guard:
+  enabled: false
+
+wandb_project: "aero-eval-codegen"
+wandb_tags: ["code-generation", "anthropic", "claude-sonnet"]
+concurrency: 5
+fail_fast: false

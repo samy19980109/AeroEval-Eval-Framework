@@ -1,0 +1,84 @@
+# =============================================================================
+# Cerebras Numerical Stability & Hardware Eval
+# =============================================================================
+# Focused on detecting numerical regressions in large-scale inference on
+# custom silicon (Cerebras WSE, TPUs, etc.). Exercises the L4 system
+# scorers and the numerical guard with aggressive thresholds.
+# Requires: VLLM_BASE_URL pointing to a vLLM server
+# =============================================================================
+
+name: "cerebras-numerical-guard"
+description: >
+  Hardware-focused evaluation designed for Cerebras wafer-scale inference.
+  Detects NaN/Inf overflow, logit drift, and latency regressions.
+  Run this after every firmware update or model conversion.
+
+provider:
+  provider_type: vllm
+  model_name: "meta-llama/Llama-3.1-70B-Instruct"
+  base_url: "${VLLM_BASE_URL}"
+  temperature: 0.0
+  max_tokens: 512
+  enable_logprobs: true
+  top_logprobs: 20
+  timeout_seconds: 180
+
+data_source:
+  source_type: jsonl
+  path: "data/samples/golden_qa.jsonl"
+  limit: 100  # Run first 100 cases for quick regression check
+
+scorers:
+  # ── Basic format sanity ──
+  - tier: L1
+    scorer_name: length
+    min_length: 1
+    max_length: 10000
+    threshold: 1.0
+
+  # ── Numerical health (the Cerebras Special) ──
+  - tier: L4
+    scorer_name: numerical_stability
+    sigma_threshold: 2.5       # Tighter than default 3σ
+    window_size: 25            # Smaller window for faster detection
+    threshold: 1.0             # Zero tolerance — any issue fails
+
+  - tier: L4
+    scorer_name: logit_drift
+    sigma_threshold: 2.0       # Aggressive drift detection
+    window_size: 30
+    threshold: 0.95
+
+  # ── Latency regression ──
+  - tier: L4
+    scorer_name: ttft
+    ttft_threshold_ms: 200     # Cerebras target: <200ms TTFT
+    threshold: 0.95
+
+  - tier: L4
+    scorer_name: latency_p99
+    p99_threshold_ms: 1500     # Tight P99 for inference server
+    threshold: 0.9
+
+  - tier: L4
+    scorer_name: throughput
+    throughput_min_tps: 50.0   # High throughput expectation
+    threshold: 0.9
+
+  # ── Semantic sanity check ──
+  - tier: L2
+    scorer_name: rouge
+    rouge_types: ["rouge1", "rougeL"]
+    threshold: 0.2             # Low bar — just checking coherence
+
+numerical_guard:
+  enabled: true
+  sigma_threshold: 2.5
+  enable_nan_check: true
+  enable_inf_check: true
+  window_size: 25
+
+wandb_project: "cerebras-numerical-stability"
+wandb_tags: ["cerebras", "numerical-guard", "hardware", "llama-70b"]
+concurrency: 20
+fail_fast: true   # Stop immediately on first numerical failure
